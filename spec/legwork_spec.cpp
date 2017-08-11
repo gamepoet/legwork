@@ -74,6 +74,7 @@ CASE("run many jobs") {
   }
   legwork_task_add(tasks, task_count, &counter);
   legwork_wait(counter, 0);
+  delete[] tasks;
   EXPECT(value == task_count);
 }
 
