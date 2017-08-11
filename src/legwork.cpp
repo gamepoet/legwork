@@ -141,7 +141,7 @@ static void fiber_switch_to(int target_fiber_id) {
 
   fiber_t* fiber_from = s_fibers + active_fiber_id;
   fiber_t* fiber_to = s_fibers + target_fiber_id;
-  jump_fcontext(&fiber_from->fcontext, fiber_to->fcontext, fiber_to->task.arg);
+  jump_fcontext(&fiber_from->fcontext, fiber_to->fcontext, fiber_to->task.arg, 1);
 }
 
 static void fiber_proc(void* arg) {
