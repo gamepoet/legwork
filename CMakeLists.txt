@@ -7,6 +7,30 @@ set(
   src/legwork.cpp
 )
 
+if(WIN32)
+  enable_language(ASM_MASM)
+else()
+  enable_language(ASM)
+endif()
+
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+  set(FCONTEXT_PLATFORM "x86_64")
+endif()
+if(APPLE)
+  set(FCONTEXT_OS "sysv")
+  set(FCONTEXT_ABI "macho")
+  set(FCONTEXT_ASM "gas.S")
+endif()
+
+set(
+  SRCS
+  ${SRCS}
+  src/fcontext.h
+  src/asm/make_${FCONTEXT_PLATFORM}_${FCONTEXT_OS}_${FCONTEXT_ABI}_${FCONTEXT_ASM}
+  src/asm/jump_${FCONTEXT_PLATFORM}_${FCONTEXT_OS}_${FCONTEXT_ABI}_${FCONTEXT_ASM}
+)
+
+
 # TODO: max out the warning settings for the compilers (why isn't there a generic way to do this?)
 #if(MSVC)
 #  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4 /WX")
