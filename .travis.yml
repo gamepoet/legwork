@@ -1,0 +1,9 @@
+language: cpp
+sudo: false
+os: osx
+osx_image: xcode8.3
+
+script:
+  - s/setup
+  - s/build
+  - s/test
