@@ -1,6 +1,7 @@
 #include "legwork.h"
 #include "fcontext.h"
 #include <atomic>
+#include <mutex>
 #include <queue>
 #include <stack>
 #include <stdlib.h>
@@ -17,7 +18,7 @@
 
 struct sleeping_fiber_t {
   int fiber_id;
-  int wait_value;
+  uint32_t wait_value;
   legwork_counter_t* counter;
 };
 
@@ -121,7 +122,7 @@ static void sleeping_fibers_push(int fiber_id, legwork_counter_t* counter, unsig
 
 static int sleeping_fibers_pop_first_ready() {
   std::lock_guard<std::mutex> lock(s_sleeping_fibers_mutex);
-  for (int index = 0, count = s_sleeping_fibers.size(); index < count; ++index) {
+  for (size_t index = 0, count = s_sleeping_fibers.size(); index < count; ++index) {
     sleeping_fiber_t* sleeping_fiber = &s_sleeping_fibers[index];
     const unsigned int value = sleeping_fiber->counter->value.load(std::memory_order_relaxed);
     if (value <= sleeping_fiber->wait_value) {
@@ -304,7 +305,7 @@ void legwork_init(const legwork_config_t* config) {
   // start the worker threads
   s_shutdown.store(false, std::memory_order_seq_cst);
   s_threads = new std::thread[s_config.worker_thread_count];
-  for (int index = 0; index < s_config.worker_thread_count; ++index) {
+  for (unsigned int index = 0; index < s_config.worker_thread_count; ++index) {
     s_threads[index] = std::thread(&worker_thread_proc, index);
   }
 }
@@ -312,7 +313,7 @@ void legwork_init(const legwork_config_t* config) {
 void legwork_shutdown() {
   // stop the worker threads
   s_shutdown.store(true, std::memory_order_seq_cst);
-  for (int index = 0; index < s_config.worker_thread_count; ++index) {
+  for (unsigned int index = 0; index < s_config.worker_thread_count; ++index) {
     s_threads[index].join();
   }
   delete[] s_threads;
@@ -346,7 +347,7 @@ void legwork_task_add(const legwork_task_t* tasks, unsigned int task_count, legw
   *counter = wait_counter;
 
   // add to the wait counter
-  wait_counter->value.fetch_add(task_count, std::memory_order_seq_cst);
+  wait_counter->value.store(task_count, std::memory_order_seq_cst);
 
   // queue the tasks
   for (unsigned int index = 0; index < task_count; ++index) {

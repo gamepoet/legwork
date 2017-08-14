@@ -1,4 +1,5 @@
 #include "legwork.h"
+#include <atomic>
 #define lest_FEATURE_AUTO_REGISTER 1
 #include "lest.hpp"
 
