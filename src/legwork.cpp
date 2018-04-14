@@ -1,5 +1,3 @@
-#include "legwork.h"
-#include "fcontext.h"
 #include <atomic>
 #include <mutex>
 #include <queue>
@@ -7,6 +5,8 @@
 #include <stdlib.h>
 #include <thread>
 #include <vector>
+#include "legwork.h"
+#include "fcontext.h"
 
 #define DEFAULT_FIBER_COUNT 256
 #define DEFAULT_FIBER_STACK_SIZE_BYTES (64 * 1024)
