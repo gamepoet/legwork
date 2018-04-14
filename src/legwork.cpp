@@ -72,10 +72,6 @@ static std::mutex s_sleeping_fibers_mutex;
 static std::mutex s_task_queue_mutex;
 static std::queue<task_queue_entry_t> s_task_queue;
 
-static void panic() {
-  exit(1);
-}
-
 static legwork_counter_t* counter_alloc() {
   std::lock_guard<std::mutex> lock(s_counter_free_pool_mutex);
   if (!s_counter_free_pool.empty()) {
@@ -286,7 +282,7 @@ void legwork_init(const legwork_config_t* config) {
   // create the wait counters
   s_counters = (legwork_counter_t*)malloc(sizeof(legwork_counter_t) * s_config.fiber_count);
   for (int index = s_config.fiber_count - 1; index >= 0; --index) {
-    legwork_counter_t* counter = new (s_counters + index) legwork_counter_t;
+    new (s_counters + index) legwork_counter_t;
     s_counter_free_pool.push(index);
   }
 
