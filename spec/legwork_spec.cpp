@@ -1,9 +1,6 @@
-#include "legwork.h"
+#include "catch.hpp"
 #include <atomic>
-#define lest_FEATURE_AUTO_REGISTER 1
-#include "lest.hpp"
-
-#define CASE(name) lest_CASE(specs, name)
+#include "legwork.h"
 
 // init/shutdown helper if an exception gets thrown
 struct init_t {
@@ -15,9 +12,7 @@ struct init_t {
   }
 };
 
-static lest::tests specs;
-
-CASE("it runs one simple job") {
+TEST_CASE("it runs one simple job") {
   init_t init(nullptr);
 
   int value = 0;
@@ -29,10 +24,10 @@ CASE("it runs one simple job") {
   task.arg = &value;
   legwork_task_add(&task, 1, &counter);
   legwork_wait(counter, 0);
-  EXPECT(value == 10);
+  CHECK(value == 10);
 }
 
-CASE("one job will wait for another") {
+TEST_CASE("one job will wait for another") {
   init_t init(nullptr);
 
   int value = 0;
@@ -57,10 +52,10 @@ CASE("one job will wait for another") {
   task.arg = &value;
   legwork_task_add(&task, 1, &counter);
   legwork_wait(counter, 0);
-  EXPECT(value == 7);
+  CHECK(value == 7);
 }
 
-CASE("run many jobs") {
+TEST_CASE("run many jobs") {
   init_t init(nullptr);
 
   std::atomic<uint32_t> value(0);
@@ -76,17 +71,5 @@ CASE("run many jobs") {
   legwork_task_add(tasks, task_count, &counter);
   legwork_wait(counter, 0);
   delete[] tasks;
-  EXPECT(value == task_count);
-}
-
-int main(int argc, char** argv) {
-  int failed_count = lest::run(specs, argc, argv);
-  if (failed_count == 0) {
-    printf("All tests pass!\n");
-  }
-  else {
-    printf("%d failures\n", failed_count);
-  }
-
-  return failed_count;
+  CHECK(value == task_count);
 }
