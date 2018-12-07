@@ -5,10 +5,10 @@
 // init/shutdown helper if an exception gets thrown
 struct init_t {
   init_t(const legwork_config_t* config) {
-    legwork_init(config);
+    legwork_lib_init(config);
   }
   ~init_t() {
-    legwork_shutdown();
+    legwork_lib_shutdown();
   }
 };
 

@@ -271,7 +271,7 @@ void legwork_config_init(legwork_config_t* config) {
   config->worker_thread_count = std::thread::hardware_concurrency();
 }
 
-void legwork_init(const legwork_config_t* config) {
+void legwork_lib_init(const legwork_config_t* config) {
   if (config) {
     s_config = *config;
   }
@@ -306,7 +306,7 @@ void legwork_init(const legwork_config_t* config) {
   }
 }
 
-void legwork_shutdown() {
+void legwork_lib_shutdown() {
   // stop the worker threads
   s_shutdown.store(true, std::memory_order_seq_cst);
   for (unsigned int index = 0; index < s_config.worker_thread_count; ++index) {

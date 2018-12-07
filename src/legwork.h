@@ -27,8 +27,8 @@ typedef struct legwork_task_t {
 } legwork_task_t;
 
 void legwork_config_init(legwork_config_t* config);
-void legwork_init(const legwork_config_t* config);
-void legwork_shutdown();
+void legwork_lib_init(const legwork_config_t* config);
+void legwork_lib_shutdown();
 
 void legwork_counter_init(legwork_counter_t* counter);
 
