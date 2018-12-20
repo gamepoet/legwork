@@ -1,9 +1,13 @@
 language: cpp
-sudo: false
 os: osx
 osx_image: xcode10.1
 
+before_install:
+  - pip install cpp-coveralls
 script:
-  - s/setup
+  - s/setup -D LEGWORK_COVERAGE=ON
   - s/build
   - s/test
+after_success:
+  - cd ${TRAVIS_BUILD_DIR}
+  - coveralls --build-root build --gcov-options '\-lp' -e spec -E ".*build/_deps/.*" -E ".*build/CMakeFiles/feature_tests.*" -E ".*/CompilerIdC/.*" -E ".*/CompilerIdCXX/.*"
