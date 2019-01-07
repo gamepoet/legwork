@@ -358,6 +358,10 @@ void legwork_wait(legwork_counter_t* counter, unsigned int value) {
   // check if the requirement is already satisfied
   // TODO: is it worth it to force this API to *ALWAYS* be async?
   if (counter->value.load(std::memory_order_relaxed) <= value) {
+    // if all the tasks have completed, free the conuter
+    if (value == 0) {
+      counter_free(counter);
+    }
     return;
   }
 
