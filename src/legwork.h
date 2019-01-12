@@ -14,6 +14,9 @@ typedef struct legwork_config_t {
   // The number of worker threads to create that will execute the fibers. Defaults to the number of hardware threads
   // supported by the current hardware.
   unsigned int worker_thread_count;
+
+  // The maximum number of times a worker thread should busy wait spin when there is no work before going to sleep.
+  unsigned int worker_thread_spin_count_before_wait;
 } legwork_config_t;
 
 typedef struct legwork_counter_t legwork_counter_t;

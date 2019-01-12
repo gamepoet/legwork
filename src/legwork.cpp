@@ -1,4 +1,5 @@
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
 #include <queue>
 #include <stack>
@@ -10,6 +11,7 @@
 
 #define DEFAULT_FIBER_COUNT 256
 #define DEFAULT_FIBER_STACK_SIZE_BYTES (64 * 1024)
+#define DEFAULT_WORKER_THREAD_SPIN_COUNT_BEFORE_WAIT (1024)
 
 #define INVALID_FIBER_ID 0
 
@@ -68,6 +70,10 @@ static std::mutex s_fiber_free_pool_mutex; // lock for the fiber free pool
 static std::vector<sleeping_fiber_t> s_sleeping_fibers;
 static std::mutex s_sleeping_fibers_mutex;
 
+static std::atomic<uint32_t> s_waiting_worker_count;
+static std::mutex s_waiting_worker_mutex;
+static std::condition_variable s_waiting_worker_cond_var;
+
 // TODO: replace with lock-free queue
 static std::mutex s_task_queue_mutex;
 static std::queue<task_queue_entry_t> s_task_queue;
@@ -88,12 +94,50 @@ static void counter_free(legwork_counter_t* counter) {
   s_counter_free_pool.push(index);
 }
 
+// puts the current thread into a wait state until it is woken up by a worker_thread_notify().
+static void worker_thread_wait() {
+  // increment the waiting worker count
+  s_waiting_worker_count.fetch_add(1);
+
+  // go to sleep
+  {
+    std::unique_lock<std::mutex> lock(s_waiting_worker_mutex);
+    // pessimistically double-check that a shutdown hasn't been requested
+    if (!s_shutdown.load(std::memory_order_seq_cst)) {
+      s_waiting_worker_cond_var.wait(lock);
+    }
+  }
+
+  // decrement the waiting worker count
+  s_waiting_worker_count.fetch_sub(1);
+}
+
+// wakes up one worker thread if any are waiting
+static void worker_thread_maybe_notify_one() {
+  const uint32_t wait_count = s_waiting_worker_count.load(std::memory_order_seq_cst);
+  if (wait_count > 0) {
+    s_waiting_worker_cond_var.notify_one();
+  }
+}
+
+// wakes up all the worker threads
+static void worker_thread_notify_all() {
+  // take the lock here so that we can be sure no threads will wait AFTER the notify
+  std::lock_guard<std::mutex> lock(s_waiting_worker_mutex);
+  s_waiting_worker_cond_var.notify_all();
+}
+
 static void task_queue_push(const legwork_task_t* task, legwork_counter_t* counter) {
   task_queue_entry_t entry;
   entry.task = *task;
   entry.counter = counter;
-  std::lock_guard<std::mutex> lock(s_task_queue_mutex);
-  s_task_queue.emplace(entry);
+
+  {
+    std::lock_guard<std::mutex> lock(s_task_queue_mutex);
+    s_task_queue.emplace(entry);
+  }
+
+  worker_thread_maybe_notify_one();
 }
 
 static bool task_queue_pop(task_queue_entry_t* entry) {
@@ -112,8 +156,12 @@ static void sleeping_fibers_push(int fiber_id, legwork_counter_t* counter, unsig
   entry.wait_value = wait_value;
   entry.counter = counter;
 
-  std::lock_guard<std::mutex> lock(s_sleeping_fibers_mutex);
-  s_sleeping_fibers.emplace_back(entry);
+  {
+    std::lock_guard<std::mutex> lock(s_sleeping_fibers_mutex);
+    s_sleeping_fibers.emplace_back(entry);
+  }
+
+  worker_thread_maybe_notify_one();
 }
 
 static int sleeping_fibers_pop_first_ready() {
@@ -236,21 +284,28 @@ static void worker_thread_proc(int worker_id) {
   s_tls_worker.worker_fiber_id = fiber_alloc(&worker_fiber_proc, nullptr, nullptr);
   s_tls_worker.active_fiber_id = s_tls_worker.worker_fiber_id;
 
+  unsigned int spin_wait_count = 0;
   while (!s_shutdown.load(std::memory_order_relaxed)) {
     int fiber_id = get_next_fiber();
     if (fiber_id == INVALID_FIBER_ID) {
       // no work to do. spin
-      // TODO: should this eventually block so that CPU cycles aren't wasted?
+      ++spin_wait_count;
+      if (spin_wait_count > s_config.worker_thread_spin_count_before_wait) {
+        // this thread spun too many times, so go into a wait state so CPU cycles are waited
+        worker_thread_wait();
+      }
       continue;
     }
+
+    // we have work! reset the spin wait count
+    spin_wait_count = 0;
 
     // run the fiber
     fiber_switch_to(fiber_id);
 
     // if the previous fiber asked to be marked as asleep, do so now
     if (s_tls_worker.sleep_fiber_id != INVALID_FIBER_ID) {
-      sleeping_fibers_push(
-          s_tls_worker.sleep_fiber_id, s_tls_worker.sleep_fiber_counter, s_tls_worker.sleep_fiber_wait_value);
+      sleeping_fibers_push(s_tls_worker.sleep_fiber_id, s_tls_worker.sleep_fiber_counter, s_tls_worker.sleep_fiber_wait_value);
       s_tls_worker.sleep_fiber_id = INVALID_FIBER_ID;
       s_tls_worker.sleep_fiber_counter = nullptr;
       s_tls_worker.sleep_fiber_wait_value = 0;
@@ -309,6 +364,7 @@ void legwork_lib_init(const legwork_config_t* config) {
 void legwork_lib_shutdown() {
   // stop the worker threads
   s_shutdown.store(true, std::memory_order_seq_cst);
+  worker_thread_notify_all();
   for (unsigned int index = 0; index < s_config.worker_thread_count; ++index) {
     s_threads[index].join();
   }
