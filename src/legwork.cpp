@@ -431,7 +431,11 @@ void legwork_task_add(const legwork_task_t* tasks, unsigned int task_count, legw
   }
 }
 
-void legwork_wait(legwork_counter_t* counter, unsigned int value) {
+void legwork_wait(legwork_counter_t* counter) {
+  legwork_wait_value(counter, 0);
+}
+
+void legwork_wait_value(legwork_counter_t* counter, unsigned int value) {
   legwork_assert(counter != nullptr, "counter must be a valid pointer");
 
   // check if the requirement is already satisfied

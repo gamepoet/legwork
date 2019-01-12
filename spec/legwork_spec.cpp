@@ -23,7 +23,7 @@ TEST_CASE("it runs one simple job") {
   task.func = func;
   task.arg = &value;
   legwork_task_add(&task, 1, &counter);
-  legwork_wait(counter, 0);
+  legwork_wait(counter);
   CHECK(value == 10);
 }
 
@@ -41,7 +41,7 @@ TEST_CASE("one job will wait for another") {
     task.func = func2;
     task.arg = arg;
     legwork_task_add(&task, 1, &counter);
-    legwork_wait(counter, 0);
+    legwork_wait(counter);
 
     *((int*)arg) += 4;
   };
@@ -51,7 +51,7 @@ TEST_CASE("one job will wait for another") {
   task.func = func1;
   task.arg = &value;
   legwork_task_add(&task, 1, &counter);
-  legwork_wait(counter, 0);
+  legwork_wait(counter);
   CHECK(value == 7);
 }
 
@@ -69,7 +69,7 @@ TEST_CASE("run many jobs") {
     tasks[index].arg = &value;
   }
   legwork_task_add(tasks, task_count, &counter);
-  legwork_wait(counter, 0);
+  legwork_wait(counter);
   delete[] tasks;
   CHECK(value == task_count);
 }

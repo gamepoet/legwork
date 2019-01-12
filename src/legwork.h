@@ -45,11 +45,10 @@ void legwork_config_init(legwork_config_t* config);
 void legwork_lib_init(const legwork_config_t* config);
 void legwork_lib_shutdown();
 
-void legwork_counter_init(legwork_counter_t* counter);
-
 void legwork_task_add(const legwork_task_t* tasks, unsigned int task_count, legwork_counter_t** counter);
 
-void legwork_wait(legwork_counter_t* counter, unsigned int value);
+void legwork_wait(legwork_counter_t* counter);
+void legwork_wait_value(legwork_counter_t* counter, unsigned int value);
 
 #ifdef __cplusplus
 }
