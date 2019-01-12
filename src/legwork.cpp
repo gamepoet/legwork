@@ -15,8 +15,9 @@
 
 #define INVALID_FIBER_ID 0
 
-#define LEGWORK_ASSERTF(expr, ...) true
-#define LEGWORK_SET_CONTEXT() ((void*)0)
+#define legwork_assert(expr, message) ((expr) ? true : (s_config.assert_func(__FILE__, __LINE__, __func__, #expr, message), false))
+#define legwork_alloc(size) s_config.alloc(size, s_config.alloc_user_data, __FILE__, __LINE__, __func__)
+#define legwork_free(ptr) s_config.free(ptr, s_config.alloc_user_data, __FILE__, __LINE__, __func__)
 
 struct sleeping_fiber_t {
   int fiber_id;
@@ -77,6 +78,19 @@ static std::condition_variable s_waiting_worker_cond_var;
 // TODO: replace with lock-free queue
 static std::mutex s_task_queue_mutex;
 static std::queue<task_queue_entry_t> s_task_queue;
+
+static void default_assert(const char* file, int line, const char* func, const char* expression, const char* message) {
+  fprintf(stderr, "ASSERT FAILURE: %s\n%s\nfile: %s\nline: %d\nfunc: %s\n", message, expression, file, line, func);
+  exit(EXIT_FAILURE);
+}
+
+static void* default_alloc(size_t size, void* user_data, const char* file, int line, const char* func) {
+  return malloc(size);
+}
+
+static void default_free(void* ptr, void* user_data, const char* file, int line, const char* func) {
+  free(ptr);
+}
 
 static legwork_counter_t* counter_alloc() {
   std::lock_guard<std::mutex> lock(s_counter_free_pool_mutex);
@@ -324,6 +338,11 @@ void legwork_config_init(legwork_config_t* config) {
   config->fiber_count = DEFAULT_FIBER_COUNT;
   config->fiber_stack_size_bytes = DEFAULT_FIBER_STACK_SIZE_BYTES;
   config->worker_thread_count = std::thread::hardware_concurrency();
+  config->worker_thread_spin_count_before_wait = DEFAULT_WORKER_THREAD_SPIN_COUNT_BEFORE_WAIT;
+  config->alloc = &default_alloc;
+  config->free = &default_free;
+  config->alloc_user_data = NULL;
+  config->assert_func = &default_assert;
 }
 
 void legwork_lib_init(const legwork_config_t* config) {
@@ -335,15 +354,15 @@ void legwork_lib_init(const legwork_config_t* config) {
   }
 
   // create the wait counters
-  s_counters = (legwork_counter_t*)malloc(sizeof(legwork_counter_t) * s_config.fiber_count);
+  s_counters = (legwork_counter_t*)legwork_alloc(sizeof(legwork_counter_t) * s_config.fiber_count);
   for (int index = s_config.fiber_count - 1; index >= 0; --index) {
     new (s_counters + index) legwork_counter_t;
     s_counter_free_pool.push(index);
   }
 
   // create the fibers
-  s_fiber_stack_memory = (char*)malloc(s_config.fiber_stack_size_bytes * s_config.fiber_count);
-  s_fibers = (fiber_t*)malloc(sizeof(fiber_t) * s_config.fiber_count);
+  s_fiber_stack_memory = (char*)legwork_alloc(s_config.fiber_stack_size_bytes * s_config.fiber_count);
+  s_fibers = (fiber_t*)legwork_alloc(sizeof(fiber_t) * s_config.fiber_count);
   for (int index = s_config.fiber_count - 1; index >= 1; --index) {
     fiber_t* fiber = s_fibers + index;
     fiber->id = index;
@@ -355,9 +374,9 @@ void legwork_lib_init(const legwork_config_t* config) {
 
   // start the worker threads
   s_shutdown.store(false, std::memory_order_seq_cst);
-  s_threads = new std::thread[s_config.worker_thread_count];
+  s_threads = (std::thread*)legwork_alloc(sizeof(std::thread) * s_config.worker_thread_count);
   for (unsigned int index = 0; index < s_config.worker_thread_count; ++index) {
-    s_threads[index] = std::thread(&worker_thread_proc, index);
+    new (s_threads + index) std::thread(&worker_thread_proc, index);
   }
 }
 
@@ -367,21 +386,22 @@ void legwork_lib_shutdown() {
   worker_thread_notify_all();
   for (unsigned int index = 0; index < s_config.worker_thread_count; ++index) {
     s_threads[index].join();
+    s_threads[index].~thread();
   }
-  delete[] s_threads;
+  legwork_free(s_threads);
   s_threads = nullptr;
 
   // destroy the fibers
-  free(s_fiber_stack_memory);
+  legwork_free(s_fiber_stack_memory);
   s_fiber_stack_memory = nullptr;
-  free(s_fibers);
+  legwork_free(s_fibers);
   s_fibers = nullptr;
   while (!s_fiber_free_pool.empty()) {
     s_fiber_free_pool.pop();
   }
 
   // destroy the wait counters
-  free(s_counters);
+  legwork_free(s_counters);
   s_counters = nullptr;
   while (!s_counter_free_pool.empty()) {
     s_counter_free_pool.pop();
@@ -389,6 +409,10 @@ void legwork_lib_shutdown() {
 }
 
 void legwork_task_add(const legwork_task_t* tasks, unsigned int task_count, legwork_counter_t** counter) {
+  legwork_assert(tasks != NULL, "tasks cannot be null");
+  legwork_assert(task_count > 0, "task_count must be greater than zero");
+  legwork_assert(counter != NULL, "counter cannot be null");
+
   legwork_counter_t* wait_counter = counter_alloc();
   if (wait_counter == nullptr) {
     // spin wait for a counter to become available
@@ -408,8 +432,7 @@ void legwork_task_add(const legwork_task_t* tasks, unsigned int task_count, legw
 }
 
 void legwork_wait(legwork_counter_t* counter, unsigned int value) {
-  LEGWORK_ASSERTF(counter != nullptr, "counter must be a valid pointer");
-  LEGWORK_SET_CONTEXT();
+  legwork_assert(counter != nullptr, "counter must be a valid pointer");
 
   // check if the requirement is already satisfied
   // TODO: is it worth it to force this API to *ALWAYS* be async?

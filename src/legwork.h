@@ -17,6 +17,18 @@ typedef struct legwork_config_t {
 
   // The maximum number of times a worker thread should busy wait spin when there is no work before going to sleep.
   unsigned int worker_thread_spin_count_before_wait;
+
+  // The function used to allocate memory. The default implementation is malloc().
+  void* (*alloc)(size_t size, void* user_data, const char* file, int line, const char* func);
+
+  // The function used to free memory. The default implementation is free().
+  void (*free)(void* ptr, void* user_data, const char* file, int line, const char* func);
+
+  // Opaque user data passed to alloc() and free().
+  void* alloc_user_data;
+
+  // The function to use when an assertion fails. The default implementation prints to stderr and terminates.
+  void (*assert_func)(const char* file, int line, const char* func, const char* expression, const char* message);
 } legwork_config_t;
 
 typedef struct legwork_counter_t legwork_counter_t;
