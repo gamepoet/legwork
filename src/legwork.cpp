@@ -471,3 +471,13 @@ void legwork_wait_value(legwork_counter_t* counter, unsigned int value) {
     counter_free(counter);
   }
 }
+
+bool legwork_is_complete(legwork_counter_t* counter) {
+  legwork_assert(counter != nullptr, "counter must be a valid pointer");
+
+  if (counter->value.load(std::memory_order_relaxed) == 0) {
+    return true;
+  }
+
+  return false;
+}

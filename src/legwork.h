@@ -50,6 +50,9 @@ void legwork_task_add(const legwork_task_t* tasks, unsigned int task_count, legw
 void legwork_wait(legwork_counter_t* counter);
 void legwork_wait_value(legwork_counter_t* counter, unsigned int value);
 
+// Tests to see if all the tasks tracked by the counter have completed.
+bool legwork_is_complete(legwork_counter_t* counter);
+
 #ifdef __cplusplus
 }
 #endif
