@@ -30,14 +30,14 @@ struct legwork_counter_t {
 };
 
 struct task_queue_entry_t {
-  legwork_task_t task;
+  legwork_task_desc_t task_desc;
   legwork_counter_t* counter;
 };
 
 struct fiber_t {
   int id;
   fcontext_t fcontext;
-  legwork_task_t task;
+  legwork_task_desc_t task_desc;
   legwork_counter_t* counter;
 };
 
@@ -141,9 +141,9 @@ static void worker_thread_notify_all() {
   s_waiting_worker_cond_var.notify_all();
 }
 
-static void task_queue_push(const legwork_task_t* task, legwork_counter_t* counter) {
+static void task_queue_push(const legwork_task_desc_t* task_desc, legwork_counter_t* counter) {
   task_queue_entry_t entry;
-  entry.task = *task;
+  entry.task_desc = *task_desc;
   entry.counter = counter;
 
   {
@@ -200,14 +200,14 @@ static void fiber_switch_to(int target_fiber_id) {
 
   fiber_t* fiber_from = s_fibers + active_fiber_id;
   fiber_t* fiber_to = s_fibers + target_fiber_id;
-  jump_fcontext(&fiber_from->fcontext, fiber_to->fcontext, fiber_to->task.arg, 1);
+  jump_fcontext(&fiber_from->fcontext, fiber_to->fcontext, fiber_to->task_desc.task, 1);
 }
 
-static void fiber_proc(void* arg) {
+static void fiber_proc(void* task) {
   // run the fiber func
   const int self_fiber_id = s_tls_worker.active_fiber_id;
   const fiber_t* fiber = s_fibers + self_fiber_id;
-  fiber->task.func(arg);
+  fiber->task_desc.func(task);
 
   // denote the fiber as completed
   legwork_counter_t* counter = fiber->counter;
@@ -220,7 +220,7 @@ static void fiber_proc(void* arg) {
   fiber_switch_to(s_tls_worker.worker_fiber_id);
 }
 
-static int fiber_alloc(legwork_task_func_t func, void* arg, legwork_counter_t* counter) {
+static int fiber_alloc(legwork_task_func_t func, void* task, legwork_counter_t* counter) {
   fiber_t* fiber = nullptr;
   {
     // grab a fiber off the free pool
@@ -241,8 +241,8 @@ static int fiber_alloc(legwork_task_func_t func, void* arg, legwork_counter_t* c
   const int fiber_id = fiber->id;
   void* stack_ptr = s_fiber_stack_memory + (fiber_id * s_config.fiber_stack_size_bytes);
   fiber->fcontext = make_fcontext(stack_ptr, s_config.fiber_stack_size_bytes, &fiber_proc);
-  fiber->task.func = func;
-  fiber->task.arg = arg;
+  fiber->task_desc.func = func;
+  fiber->task_desc.task = task;
   fiber->counter = counter;
 
   return fiber_id;
@@ -251,8 +251,8 @@ static int fiber_alloc(legwork_task_func_t func, void* arg, legwork_counter_t* c
 static void fiber_free(int fiber_id) {
   fiber_t* fiber = s_fibers + fiber_id;
   fiber->fcontext = nullptr;
-  fiber->task.func = nullptr;
-  fiber->task.arg = nullptr;
+  fiber->task_desc.func = nullptr;
+  fiber->task_desc.task = nullptr;
   fiber->counter = nullptr;
   {
     std::lock_guard<std::mutex> lock(s_fiber_free_pool_mutex);
@@ -273,13 +273,13 @@ static int get_next_fiber() {
   task_queue_entry_t task_queue_entry;
   const bool task_is_valid = task_queue_pop(&task_queue_entry);
   if (task_is_valid) {
-    fiber_id = fiber_alloc(task_queue_entry.task.func, task_queue_entry.task.arg, task_queue_entry.counter);
+    fiber_id = fiber_alloc(task_queue_entry.task_desc.func, task_queue_entry.task_desc.task, task_queue_entry.counter);
   }
 
   return fiber_id;
 }
 
-static void worker_fiber_proc(void* arg) {
+static void worker_fiber_proc(void* task) {
   printf("shouldn't be here\n");
 }
 
@@ -367,8 +367,8 @@ void legwork_lib_init(const legwork_config_t* config) {
     fiber_t* fiber = s_fibers + index;
     fiber->id = index;
     fiber->fcontext = nullptr;
-    fiber->task.func = nullptr;
-    fiber->task.arg = nullptr;
+    fiber->task_desc.func = nullptr;
+    fiber->task_desc.task = nullptr;
     s_fiber_free_pool.push(index);
   }
 
@@ -408,9 +408,9 @@ void legwork_lib_shutdown() {
   }
 }
 
-void legwork_task_add(const legwork_task_t* tasks, unsigned int task_count, legwork_counter_t** counter) {
-  legwork_assert(tasks != NULL, "tasks cannot be null");
-  legwork_assert(task_count > 0, "task_count must be greater than zero");
+void legwork_task_add(const legwork_task_desc_t* task_descs, unsigned int task_desc_count, legwork_counter_t** counter) {
+  legwork_assert(task_descs != NULL, "task_descs cannot be null");
+  legwork_assert(task_desc_count > 0, "task_desc_count must be greater than zero");
   legwork_assert(counter != NULL, "counter cannot be null");
 
   legwork_counter_t* wait_counter = counter_alloc();
@@ -423,11 +423,11 @@ void legwork_task_add(const legwork_task_t* tasks, unsigned int task_count, legw
   *counter = wait_counter;
 
   // add to the wait counter
-  wait_counter->value.store(task_count, std::memory_order_seq_cst);
+  wait_counter->value.store(task_desc_count, std::memory_order_seq_cst);
 
-  // queue the tasks
-  for (unsigned int index = 0; index < task_count; ++index) {
-    task_queue_push(tasks + index, wait_counter);
+  // queue the task_descs
+  for (unsigned int index = 0; index < task_desc_count; ++index) {
+    task_queue_push(task_descs + index, wait_counter);
   }
 }
 
