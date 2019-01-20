@@ -19,7 +19,7 @@ typedef struct legwork_config_t {
   unsigned int worker_thread_spin_count_before_wait;
 
   // The function used to allocate memory. The default implementation is malloc().
-  void* (*alloc)(size_t size, void* user_data, const char* file, int line, const char* func);
+  void* (*alloc)(unsigned int size, void* user_data, const char* file, int line, const char* func);
 
   // The function used to free memory. The default implementation is free().
   void (*free)(void* ptr, void* user_data, const char* file, int line, const char* func);

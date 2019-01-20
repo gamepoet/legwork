@@ -84,7 +84,7 @@ static void default_assert(const char* file, int line, const char* func, const c
   exit(EXIT_FAILURE);
 }
 
-static void* default_alloc(size_t size, void* user_data, const char* file, int line, const char* func) {
+static void* default_alloc(unsigned int size, void* user_data, const char* file, int line, const char* func) {
   return malloc(size);
 }
 
