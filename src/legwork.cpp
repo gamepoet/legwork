@@ -209,6 +209,11 @@ static void fiber_proc(void* task) {
   const fiber_t* fiber = s_fibers + self_fiber_id;
   fiber->task_desc.func(task);
 
+  // run the on_complete func
+  if (fiber->task_desc.on_complete != nullptr) {
+    fiber->task_desc.on_complete(task);
+  }
+
   // denote the fiber as completed
   legwork_counter_t* counter = fiber->counter;
   if (counter != nullptr) {
@@ -222,7 +227,7 @@ static void fiber_proc(void* task) {
   fiber_switch_to(s_tls_worker.worker_fiber_id);
 }
 
-static int fiber_alloc(legwork_task_func_t func, void* task, legwork_counter_t* counter) {
+static int fiber_alloc(legwork_task_desc_t* task_desc, legwork_counter_t* counter) {
   fiber_t* fiber = nullptr;
   {
     // grab a fiber off the free pool
@@ -243,8 +248,7 @@ static int fiber_alloc(legwork_task_func_t func, void* task, legwork_counter_t* 
   const int fiber_id = fiber->id;
   void* stack_ptr = s_fiber_stack_memory + (fiber_id * s_config.fiber_stack_size_bytes);
   fiber->fcontext = make_fcontext(stack_ptr, s_config.fiber_stack_size_bytes, &fiber_proc);
-  fiber->task_desc.func = func;
-  fiber->task_desc.task = task;
+  fiber->task_desc = *task_desc;
   fiber->counter = counter;
 
   return fiber_id;
@@ -275,7 +279,7 @@ static int get_next_fiber() {
   task_queue_entry_t task_queue_entry;
   const bool task_is_valid = task_queue_pop(&task_queue_entry);
   if (task_is_valid) {
-    fiber_id = fiber_alloc(task_queue_entry.task_desc.func, task_queue_entry.task_desc.task, task_queue_entry.counter);
+    fiber_id = fiber_alloc(&task_queue_entry.task_desc, task_queue_entry.counter);
   }
 
   return fiber_id;
@@ -297,7 +301,9 @@ static void worker_thread_proc(int worker_id) {
 
   // alloc a fiber for this worker even though it won't execute. the fiber is used to record the current stack so that
   // completing fibers can switch back to this worker
-  s_tls_worker.worker_fiber_id = fiber_alloc(&worker_fiber_proc, nullptr, nullptr);
+  legwork_task_desc_t worker_task_desc = {};
+  worker_task_desc.func = &worker_fiber_proc;
+  s_tls_worker.worker_fiber_id = fiber_alloc(&worker_task_desc, nullptr);
   s_tls_worker.active_fiber_id = s_tls_worker.worker_fiber_id;
 
   unsigned int spin_wait_count = 0;
@@ -484,4 +490,8 @@ bool legwork_is_complete(legwork_counter_t* counter) {
   }
 
   return false;
+}
+
+int legwork_get_fiber_id() {
+  return s_tls_worker.active_fiber_id;
 }

@@ -39,6 +39,7 @@ typedef void (*legwork_task_func_t)(void* arg);
 typedef struct legwork_task_desc_t {
   legwork_task_func_t func;
   void* task;
+  void (*on_complete)(void* task);
 } legwork_task_desc_t;
 
 void legwork_config_init(legwork_config_t* config);
@@ -55,6 +56,9 @@ void legwork_wait_value(legwork_counter_t* counter, unsigned int value);
 
 // Tests to see if all the tasks tracked by the counter have completed.
 bool legwork_is_complete(legwork_counter_t* counter);
+
+// Gets the id of the currently running fiber.
+int legwork_get_fiber_id();
 
 #ifdef __cplusplus
 }
