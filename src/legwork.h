@@ -45,6 +45,9 @@ void legwork_config_init(legwork_config_t* config);
 void legwork_lib_init(const legwork_config_t* config);
 void legwork_lib_shutdown();
 
+// Adds some tasks to the queue to be executed whenever a fiber is ready. If `counter` is not NULL, then it can be
+// waited on for when the task completes. If `counter` is NULL, then it is a fire and forget task that cannot be waited
+// on.
 void legwork_task_add(const legwork_task_desc_t* task_descs, unsigned int task_desc_count, legwork_counter_t** counter);
 
 void legwork_wait(legwork_counter_t* counter);

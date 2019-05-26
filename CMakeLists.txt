@@ -54,7 +54,7 @@ target_include_directories(
 target_compile_options(
   legwork
   PRIVATE
-  $<$<CXX_COMPILER_ID:AppleClang>:-Wall -Wextra -Wpedantic -Wno-unused-parameter>
+  $<$<CXX_COMPILER_ID:AppleClang>:-Wall -Wextra -Wpedantic -Wshadow-all -Wno-unused-parameter>
   $<$<CXX_COMPILER_ID:MSVC>:/W4 /wd4100>
 )
 if (LEGWORK_COVERAGE)
@@ -89,7 +89,7 @@ if (LEGWORK_BUILD_TESTS)
   target_compile_options(
     test_runner
     PRIVATE
-    $<$<CXX_COMPILER_ID:AppleClang>:-Wall -Wextra -Wpedantic -Wno-unused-parameter>
+    $<$<CXX_COMPILER_ID:AppleClang>:-Wall -Wextra -Wpedantic -Wshadow-all -Wno-unused-parameter>
     $<$<CXX_COMPILER_ID:MSVC>:/W4 /wd4100>
   )
   if (LEGWORK_COVERAGE)

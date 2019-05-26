@@ -211,7 +211,9 @@ static void fiber_proc(void* task) {
 
   // denote the fiber as completed
   legwork_counter_t* counter = fiber->counter;
-  counter->value.fetch_sub(1, std::memory_order_seq_cst);
+  if (counter != nullptr) {
+    counter->value.fetch_sub(1, std::memory_order_seq_cst);
+  }
 
   // ask to have this fiber be freed
   s_tls_worker.free_fiber_id = self_fiber_id;
@@ -411,19 +413,21 @@ void legwork_lib_shutdown() {
 void legwork_task_add(const legwork_task_desc_t* task_descs, unsigned int task_desc_count, legwork_counter_t** counter) {
   legwork_assert(task_descs != NULL, "task_descs cannot be null");
   legwork_assert(task_desc_count > 0, "task_desc_count must be greater than zero");
-  legwork_assert(counter != NULL, "counter cannot be null");
 
-  legwork_counter_t* wait_counter = counter_alloc();
-  if (wait_counter == nullptr) {
-    // spin wait for a counter to become available
-    while (wait_counter == nullptr) {
-      wait_counter = counter_alloc();
+  legwork_counter_t* wait_counter = nullptr;
+  if (counter != nullptr) {
+    wait_counter = counter_alloc();
+    if (wait_counter == nullptr) {
+      // spin wait for a counter to become available
+      while (wait_counter == nullptr) {
+        wait_counter = counter_alloc();
+      }
     }
-  }
-  *counter = wait_counter;
+    *counter = wait_counter;
 
-  // add to the wait counter
-  wait_counter->value.store(task_desc_count, std::memory_order_seq_cst);
+    // add to the wait counter
+    wait_counter->value.store(task_desc_count, std::memory_order_seq_cst);
+  }
 
   // queue the task_descs
   for (unsigned int index = 0; index < task_desc_count; ++index) {
