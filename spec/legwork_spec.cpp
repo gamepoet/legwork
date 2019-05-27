@@ -21,7 +21,7 @@ TEST_CASE("it runs one simple job") {
   auto func = [](void* task) { *((int*)task) = 10; };
 
   legwork_counter_t* counter;
-  legwork_task_desc_t task_desc;
+  legwork_task_desc_t task_desc = {};
   task_desc.func = func;
   task_desc.task = &value;
   legwork_task_add(&task_desc, 1, &counter);
@@ -39,7 +39,7 @@ TEST_CASE("one job will wait for another") {
     auto func2 = [](void* task2) { *((int*)task2) += 2; };
 
     legwork_counter_t* counter;
-    legwork_task_desc_t task_desc;
+    legwork_task_desc_t task_desc = {};
     task_desc.func = func2;
     task_desc.task = task;
     legwork_task_add(&task_desc, 1, &counter);
@@ -49,7 +49,7 @@ TEST_CASE("one job will wait for another") {
   };
 
   legwork_counter_t* counter;
-  legwork_task_desc_t task_desc;
+  legwork_task_desc_t task_desc = {};
   task_desc.func = func1;
   task_desc.task = &value;
   legwork_task_add(&task_desc, 1, &counter);
@@ -69,6 +69,7 @@ TEST_CASE("run many jobs") {
   for (int index = 0; index < task_count; ++index) {
     task_descs[index].func = func;
     task_descs[index].task = &value;
+    task_descs[index].on_complete = nullptr;
   }
   legwork_task_add(task_descs, task_count, &counter);
   legwork_wait(counter);
